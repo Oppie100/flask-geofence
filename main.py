@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, send_from_directory
 from geopy.distance import geodesic
 from twilio.rest import Client
 import os
@@ -9,7 +9,7 @@ app = Flask(__name__)
 home_coords = (-23.4175, 29.474083)
 geofence_radius = 50  # in meters
 
-# 🟢 Twilio setup (replace these with your actual Twilio credentials)
+# 🟢 Twilio setup (environment variables)
 TWILIO_SID = os.getenv("TWILIO_SID")
 TWILIO_AUTH = os.getenv("TWILIO_AUTH")
 TWILIO_FROM = os.getenv("TWILIO_FROM")
@@ -20,6 +20,12 @@ twilio_client = Client(TWILIO_SID, TWILIO_AUTH)
 # Internal flag to avoid duplicate alerts
 inside = False
 
+# ✅ Serve the HTML form at root
+@app.route('/')
+def index():
+    return send_from_directory('.', 'send_location.html')
+
+# 📍 Endpoint to receive and process location
 @app.route('/location', methods=['POST'])
 def location():
     global inside
@@ -31,9 +37,8 @@ def location():
         return {"status": "error", "message": "Missing coordinates"}, 400
 
     distance = geodesic(home_coords, (lat, lon)).meters
-    print(f"📍 Received location: {lat}, {lon} | Distance from home: {distance:.2f} meters")
+    print(f"📍 Received location: {lat}, {lon} | Distance: {distance:.2f} meters")
 
-    # Entry detection
     if distance <= geofence_radius and not inside:
         inside = True
         print("🚨 Someone entered the geofence!")
@@ -43,6 +48,7 @@ def location():
 
     return {"status": "ok", "distance": distance}
 
+# 📤 Send a WhatsApp alert
 def send_alert():
     message = twilio_client.messages.create(
         body="🚨 Alert: Someone has entered your geofence at home!",

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head><title>Send Your Location and Tag</title></head>
+<body>
+  <h2>Send Your Location and Tag</h2>
+  <form id="form">
+    <label>Your Tag (name): <input type="text" id="userId" required></label><br><br>
+    <label>Latitude: <input type="text" id="lat" readonly></label><br>
+    <label>Longitude: <input type="text" id="lon" readonly></label><br><br>
+    <button type="submit">Send Location</button>
+  </form>
+  <p id="result"></p>
+
+  <script>
+    window.onload = () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(position => {
+          document.getElementById('lat').value = position.coords.latitude;
+          document.getElementById('lon').value = position.coords.longitude;
+        }, error => {
+          document.getElementById('result').textContent = 'Could not get location: ' + error.message;
+        });
+      } else {
+        document.getElementById('result').textContent = 'Geolocation is not supported by your browser.';
+      }
+    };
+
+    document.getElementById('form').addEventListener('submit', e => {
+      e.preventDefault();
+      const user_id = document.getElementById('userId').value.trim();
+      const lat = parseFloat(document.getElementById('lat').value);
+      const lon = parseFloat(document.getElementById('lon').value);
+
+      if (!user_id) {
+        alert("Please enter your tag (name)!");
+        return;
+      }
+      if (isNaN(lat) || isNaN(lon)) {
+        alert("Location not available yet, please allow location access and reload.");
+        return;
+      }
+
+      fetch('https://flask-geofence.onrender.com/location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id, lat, lon })
+      })
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('result').textContent = 'Server response: ' + JSON.stringify(data);
+      })
+      .catch(err => {
+        document.getElementById('result').textContent = 'Error sending data: ' + err;
+      });
+    });
+  </script>
+</body>
+</html>
