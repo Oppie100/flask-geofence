@@ -9,22 +9,23 @@ app = Flask(__name__)
 home_coords = (-23.4175, 29.474083)
 geofence_radius = 10  # meters
 
-# Twilio
+# Twilio credentials from environment variables
 TWILIO_SID = os.getenv("TWILIO_SID")
 TWILIO_AUTH = os.getenv("TWILIO_AUTH")
 TWILIO_FROM = os.getenv("TWILIO_FROM")
 TO_NUMBER = os.getenv("TO_NUMBER")
+
 twilio_client = Client(TWILIO_SID, TWILIO_AUTH)
 
-# Internal state
-inside = False
+# Track geofence state per user tag
+user_states = {}
 
 @app.route("/")
 def index():
     return render_template_string("""
 <!DOCTYPE html>
 <html>
-<head><title>Geofence Test</title></head>
+<head><title>Geofence Tracker</title></head>
 <body>
   <h2>Send Your Location</h2>
   <form id="form">
@@ -55,10 +56,11 @@ def index():
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data)
         });
+
         const result = await res.json();
         status.textContent = "📍 Distance: " + result.distance.toFixed(2) + " meters";
       }, () => {
-        status.textContent = "Location denied or error.";
+        status.textContent = "Location access denied.";
       });
     });
   </script>
@@ -68,7 +70,6 @@ def index():
 
 @app.route('/location', methods=['POST'])
 def location():
-    global inside
     data = request.get_json()
     lat = data.get("lat")
     lon = data.get("lon")
@@ -80,17 +81,21 @@ def location():
     distance = geodesic(home_coords, (lat, lon)).meters
     print(f"📍 {tag} at {lat}, {lon} | Distance: {distance:.2f}m")
 
+    # Get last known state for this tag
+    inside = user_states.get(tag, False)
+
+    # Detect entry
     if distance <= geofence_radius and not inside:
-        inside = True
+        user_states[tag] = True
         send_alert(tag)
     elif distance > geofence_radius:
-        inside = False
+        user_states[tag] = False
 
     return {"status": "ok", "distance": distance}
 
 def send_alert(tag):
     message = twilio_client.messages.create(
-        body=f"🚨 Alert: {tag} entered your geofence!",
+        body=f"🚨 Alert: {tag} has entered your geofence!",
         from_=TWILIO_FROM,
         to=TO_NUMBER
     )
