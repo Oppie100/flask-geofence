@@ -5,29 +5,31 @@ import os
 
 app = Flask(__name__)
 
-# Your home location
+# 📍 Home coordinates
 home_coords = (-23.4175, 29.474083)
 geofence_radius = 10  # meters
 
-# Twilio credentials from environment variables
+# 🔐 Known authorized users
+authorized_tags = {"Oppie", "Mom", "Dad", "John"}
+
+# Twilio setup
 TWILIO_SID = os.getenv("TWILIO_SID")
 TWILIO_AUTH = os.getenv("TWILIO_AUTH")
 TWILIO_FROM = os.getenv("TWILIO_FROM")
 TO_NUMBER = os.getenv("TO_NUMBER")
-
 twilio_client = Client(TWILIO_SID, TWILIO_AUTH)
 
-# Track geofence state per user tag
-user_states = {}
+# Track who's inside
+inside_users = set()
 
 @app.route("/")
 def index():
     return render_template_string("""
 <!DOCTYPE html>
 <html>
-<head><title>Geofence Tracker</title></head>
+<head><title>Geofence Monitor</title></head>
 <body>
-  <h2>Send Your Location</h2>
+  <h2>Enter Your Name and Send Location</h2>
   <form id="form">
     <input type="text" id="tag" placeholder="Your name or tag" required><br><br>
     <button type="submit">Send Location</button>
@@ -56,11 +58,10 @@ def index():
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data)
         });
-
         const result = await res.json();
         status.textContent = "📍 Distance: " + result.distance.toFixed(2) + " meters";
       }, () => {
-        status.textContent = "Location access denied.";
+        status.textContent = "Location denied or error.";
       });
     });
   </script>
@@ -81,21 +82,22 @@ def location():
     distance = geodesic(home_coords, (lat, lon)).meters
     print(f"📍 {tag} at {lat}, {lon} | Distance: {distance:.2f}m")
 
-    # Get last known state for this tag
-    inside = user_states.get(tag, False)
+    if distance <= geofence_radius and tag not in inside_users:
+        inside_users.add(tag)
 
-    # Detect entry
-    if distance <= geofence_radius and not inside:
-        user_states[tag] = True
-        send_alert(tag)
-    elif distance > geofence_radius:
-        user_states[tag] = False
+        if tag not in authorized_tags:
+            send_alert(f"🚨 UNAUTHORIZED: {tag} entered your geofence!")
+        else:
+            send_alert(f"✅ {tag} entered your geofence.")
+
+    elif distance > geofence_radius and tag in inside_users:
+        inside_users.remove(tag)
 
     return {"status": "ok", "distance": distance}
 
-def send_alert(tag):
+def send_alert(message_text):
     message = twilio_client.messages.create(
-        body=f"🚨 Alert: {tag} has entered your geofence!",
+        body=message_text,
         from_=TWILIO_FROM,
         to=TO_NUMBER
     )
