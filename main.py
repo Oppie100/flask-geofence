@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 # Your home location
 home_coords = (-23.4175, 29.474083)
-geofence_radius = 50  # meters
+geofence_radius = 10  # meters
 
 # Twilio
 TWILIO_SID = os.getenv("TWILIO_SID")
